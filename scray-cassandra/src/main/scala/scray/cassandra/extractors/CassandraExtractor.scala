@@ -118,7 +118,17 @@ class CassandraExtractor[Q <: DomainQuery](session: Session, table: TableIdentif
    * return whether and maybe how the given column is auto-indexed by Cassandra-Lucene-Plugin 
    */
   private def getColumnCassandraLuceneIndexed(tmOpt: Option[TableMetadata], column: Column,  splitters: Map[Column, Splitter[_]]): Option[AutoIndexConfiguration[_]] = {
-    val idxMetadata = tmOpt.flatMap { tm => Option(tm.getIndex(Metadata.quote(CassandraExtractor.LUCENE_INDEX_NAME(tm.getName)))) }
+    
+    // Query lucene index for case sensitive and case insensitive names
+    val idxMetadataCS =tmOpt.flatMap { tm => Option(tm.getIndex(Metadata.quote(CassandraExtractor.LUCENE_INDEX_NAME(tm.getName, true)))) }
+    val idxMetadataCIS = tmOpt.flatMap { tm => Option(tm.getIndex(Metadata.quote(CassandraExtractor.LUCENE_INDEX_NAME(tm.getName, false)))) }
+
+    val idxMetadata = if(idxMetadataCS.isDefined) {
+      idxMetadataCS
+    } else {
+      idxMetadataCIS
+    }
+    
     val schemaOpt = idxMetadata.map { schemaOptions => schemaOptions.getOption(CassandraExtractor.LUCENE_INDEX_SCHEMA_OPTION_NAME) }
     
     schemaOpt.flatMap { schema =>
@@ -367,7 +377,13 @@ object CassandraExtractor {
 //  }
   
   val DB_ID: String = "cassandra"
-  val LUCENE_INDEX_NAME: String => String = (cfName: String) => s"""${cfName}_lucene_index"""
+  val LUCENE_INDEX_NAME: (String, Boolean) => String = (cfName: String, cfNameIsCaseSensitiv: Boolean) => {
+    if(cfNameIsCaseSensitiv) {
+      s"""${cfName}_lucene_index"""
+    } else {
+      s"""${cfName.toLowerCase()}_lucene_index"""
+    }
+  }
   val LUCENE_INDEX_SCHEMA_OPTION_NAME: String = "schema"
 
   lazy val outerPattern = Pattern.compile("^\\s*\\{\\s*fields\\s*:\\s*\\{(.*)\\s*}\\s*\\}\\s*$", Pattern.DOTALL)
