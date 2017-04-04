@@ -164,7 +164,7 @@ class CassandraExtractor[Q <: DomainQuery](session: Session, table: TableIdentif
       case _ => None
     }
     val tm = metadata.flatMap(ksmeta => Option(CassandraUtils.getTableMetadata(tableName, ksmeta)))
-    val autoIndex = tm.flatMap { tm => 
+    val autoIndexCaseSensitive = tm.flatMap { tm => 
         val idxMethadata =  tm.getIndex(Metadata.quote(tm.getName + "_" + column.columnName))
         if(idxMethadata == null) {
           None
@@ -173,12 +173,23 @@ class CassandraExtractor[Q <: DomainQuery](session: Session, table: TableIdentif
           Some(true)
         }
     }.isDefined
-
+    
+    val autoIndexCaseInsensitive = tm.flatMap { tm => 
+        val idxMethadata =  tm.getIndex(Metadata.quote(tm.getName.toLowerCase + "_" + column.columnName.toLowerCase))
+        if(idxMethadata == null) {
+          None
+        } else {
+          logger.debug(s"Found index for ${tm.getKeyspace.getName.toLowerCase()}.${tm.getName}.${column.columnName.toLowerCase()} ")
+          Some(true)
+        }
+    }.isDefined
+    
+    
     val autoIndexConfig = getColumnCassandraLuceneIndexed(tm, column, splitters)
     if(autoIndexConfig.isDefined) {
       (true, autoIndexConfig)
     } else {
-      (autoIndex, None)    
+      ((autoIndexCaseSensitive | autoIndexCaseInsensitive), None)    
     }
   }
 
